@@ -18,7 +18,6 @@ class TreeNode:
         sibling_index = len(siblings)  # Current position among siblings
         
         # Determine the level (odd or even)
-        # Count periods and letters to determine depth
         level = parent_id.count('.') + sum(c.isalpha() for c in parent_id)
         
         if level % 2 == 1:  # Odd level (ends with number) -> children get letters
@@ -39,9 +38,219 @@ class TreeNode:
         return f"TreeNode(id={self.id}, name={self.name})"
 
 
+class TreeBuilder:
+    """Build a tree from various input formats"""
+    
+    @staticmethod
+    def from_dict(data):
+        """
+        Build tree from nested dictionary structure.
+        Format: {"name": "Node Name", "children": [...]}
+        """
+        def build_node(node_data, parent=None):
+            node = TreeNode(node_data["name"], parent=parent)
+            
+            if "children" in node_data:
+                for child_data in node_data["children"]:
+                    build_node(child_data, parent=node)
+            
+            return node
+        
+        return build_node(data)
+    
+    @staticmethod
+    def from_nested_dict(data):
+        """
+        Build tree from simple nested dictionary.
+        Format: {"Parent": {"Child1": {}, "Child2": {"Grandchild": {}}}}
+        """
+        def build_node(name, children_dict, parent=None):
+            node = TreeNode(name, parent=parent)
+            
+            for child_name, grandchildren in children_dict.items():
+                build_node(child_name, grandchildren, parent=node)
+            
+            return node
+        
+        # Get root name and children
+        root_name = list(data.keys())[0]
+        root_children = data[root_name]
+        
+        return build_node(root_name, root_children)
+    
+    @staticmethod
+    def from_indented_text(text):
+        """
+        Build tree from indented text structure.
+        Each line represents a node, indentation shows hierarchy.
+        Example:
+            Root
+              Child A
+                Grandchild 1
+              Child B
+        """
+        lines = [line.rstrip() for line in text.strip().split('\n') if line.strip()]
+        
+        def get_indent_level(line):
+            return len(line) - len(line.lstrip())
+        
+        if not lines:
+            return None
+        
+        # Create root
+        root = TreeNode(lines[0].strip())
+        stack = [(get_indent_level(lines[0]), root)]
+        
+        for line in lines[1:]:
+            indent = get_indent_level(line)
+            name = line.strip()
+            
+            # Find parent by popping stack until we find correct indent level
+            while stack and stack[-1][0] >= indent:
+                stack.pop()
+            
+            if stack:
+                parent = stack[-1][1]
+                node = TreeNode(name, parent=parent)
+                stack.append((indent, node))
+        
+        return root
+    
+    @staticmethod
+    def from_paths(paths):
+        """
+        Build tree from list of paths.
+        Example: ["Root/Child A/Grandchild 1", "Root/Child A/Grandchild 2", "Root/Child B"]
+        """
+        if not paths:
+            return None
+        
+        # Find or create node by path
+        nodes = {}
+        root = None
+        
+        for path in paths:
+            parts = [p.strip() for p in path.split('/')]
+            
+            for i, part in enumerate(parts):
+                current_path = '/'.join(parts[:i+1])
+                
+                if current_path not in nodes:
+                    if i == 0:
+                        # Root node
+                        node = TreeNode(part)
+                        nodes[current_path] = node
+                        if root is None:
+                            root = node
+                    else:
+                        # Child node
+                        parent_path = '/'.join(parts[:i])
+                        parent = nodes[parent_path]
+                        node = TreeNode(part, parent=parent)
+                        nodes[current_path] = node
+        
+        return root
+
+
 # Example usage
 if __name__ == "__main__":
-    # Create root
+    print("=" * 60)
+    print("METHOD 1: Building from nested dictionary with 'children' key")
+    print("=" * 60)
+    
+    tree_data = {
+        "name": "Root",
+        "children": [
+            {
+                "name": "Child A",
+                "children": [
+                    {
+                        "name": "Grandchild 1",
+                        "children": [
+                            {"name": "Great-Grandchild A"},
+                            {"name": "Great-Grandchild B"}
+                        ]
+                    },
+                    {"name": "Grandchild 2"}
+                ]
+            },
+            {
+                "name": "Child B",
+                "children": [
+                    {
+                        "name": "Grandchild 3",
+                        "children": [
+                            {"name": "Great-Grandchild C"},
+                            {"name": "Great-Grandchild D"}
+                        ]
+                    }
+                ]
+            },
+            {"name": "Child C"}
+        ]
+    }
+    
+    tree1 = TreeBuilder.from_dict(tree_data)
+    tree1.display()
+    
+    print("\n" + "=" * 60)
+    print("METHOD 2: Building from simple nested dictionary")
+    print("=" * 60)
+    
+    simple_tree = {
+        "Root": {
+            "Child A": {
+                "Grandchild 1": {
+                    "Great-Grandchild A": {},
+                    "Great-Grandchild B": {}
+                },
+                "Grandchild 2": {}
+            },
+            "Child B": {
+                "Grandchild 3": {}
+            },
+            "Child C": {}
+        }
+    }
+    
+    tree2 = TreeBuilder.from_nested_dict(simple_tree)
+    tree2.display()
+    
+    print("\n" + "=" * 60)
+    print("METHOD 3: Building from indented text")
+    print("=" * 60)
+    
+    text_tree = """
+Root
+  Child A
+    Grandchild 1
+      Great-Grandchild A
+      Great-Grandchild B
+    Grandchild 2
+  Child B
+    Grandchild 3
+  Child C
+    """
+    
+    tree3 = TreeBuilder.from_indented_text(text_tree)
+    tree3.display()
+    
+    print("\n" + "=" * 60)
+    print("METHOD 4: Building from path list")
+    print("=" * 60)
+    
+    paths = [
+        "Root/Child A/Grandchild 1/Great-Grandchild A",
+        "Root/Child A/Grandchild 1/Great-Grandchild B",
+        "Root/Child A/Grandchild 2",
+        "Root/Child B/Grandchild 3",
+        "Root/Child C"
+    ]
+    
+    tree4 = TreeBuilder.from_paths(paths)
+    tree4.display()
+    
+   # Create root
     root = TreeNode("Root")
     
     # Add siblings to root (1.2, 1.3)
